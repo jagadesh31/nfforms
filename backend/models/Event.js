@@ -4,6 +4,7 @@ const questionSchema = new mongoose.Schema(
   {
     text: { type: String, required: true },
     required: { type: Boolean, default: true },
+    isRollNumber: { type: Boolean, default: false },
   },
   { _id: false }
 );

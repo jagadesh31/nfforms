@@ -184,6 +184,38 @@ router.get('/:id/responses', auth, async (req, res) => {
   res.json(responses);
 });
 
+// POC or Admin updates an existing response
+router.put('/:id/responses/:responseId', auth, async (req, res) => {
+  try {
+    const event = await Event.findById(req.params.id);
+    if (!event) return res.status(404).json({ message: 'Event not found' });
+
+    const isAdmin = req.user.role === 'admin' || req.user.role === 'masterAdmin';
+    const isPocForEvent =
+      req.user.role === 'poc' && event.pocUsers.some((u) => u.equals(req.user._id));
+
+    if (!isAdmin && !isPocForEvent) {
+      return res.status(403).json({ message: 'Forbidden' });
+    }
+
+    const response = await Response.findById(req.params.responseId);
+    if (!response || response.event.toString() !== event._id.toString()) {
+      return res.status(404).json({ message: 'Response not found' });
+    }
+
+    const { teamName, answers } = req.body;
+    if (teamName !== undefined) response.teamName = teamName;
+    if (answers !== undefined) response.answers = answers;
+
+    await response.save();
+    await log('RESPONSE_UPDATED', req.user._id, event._id, `${req.user.role.toUpperCase()} updated response for team "${response.teamName}"`);
+    res.json(response);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 // Admin-only: view activity logs
 router.get('/admin/logs', auth, requireRole('admin'), async (req, res) => {
   const logs = await Log.find()

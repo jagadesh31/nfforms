@@ -2,30 +2,61 @@ import React, { useEffect, useState } from 'react';
 import { apiRequest } from '../api';
 import { useAuth } from '../AuthContext';
 
+const Icons = {
+  Events: () => (
+    <svg className="nav-icon" viewBox="0 0 24 24">
+      <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+      <line x1="16" y1="2" x2="16" y2="6" />
+      <line x1="8" y1="2" x2="8" y2="6" />
+      <line x1="3" y1="10" x2="21" y2="10" />
+    </svg>
+  ),
+  Create: () => (
+    <svg className="nav-icon" viewBox="0 0 24 24">
+      <line x1="12" y1="5" x2="12" y2="19" />
+      <line x1="5" y1="12" x2="19" y2="12" />
+    </svg>
+  ),
+  Users: () => (
+    <svg className="nav-icon" viewBox="0 0 24 24">
+      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+    </svg>
+  ),
+  Logs: () => (
+    <svg className="nav-icon" viewBox="0 0 24 24">
+      <line x1="4" y1="6" x2="20" y2="6" />
+      <line x1="4" y1="12" x2="20" y2="12" />
+      <line x1="4" y1="18" x2="20" y2="18" />
+    </svg>
+  )
+};
+
 export function AdminDashboard() {
   const { user } = useAuth();
   const isMasterAdmin = user?.role === 'masterAdmin';
 
+  const [activeTab, setActiveTab] = useState('events'); // events | create | users | logs
+
   const [events, setEvents] = useState([]);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
-  const [questions, setQuestions] = useState(['']);
+  const [questions, setQuestions] = useState([{ text: '', isRollNumber: false }]);
   const [deadline, setDeadline] = useState('');
   const [pocUsers, setPocUsers] = useState([]);
   const [selectedPocIds, setSelectedPocIds] = useState([]);
   const [error, setError] = useState('');
   const [logs, setLogs] = useState([]);
-  const [showLogs, setShowLogs] = useState(false);
-  const [showAddUser, setShowAddUser] = useState(false);
+
+  // User Management
   const [newUserName, setNewUserName] = useState('');
   const [newUserEmail, setNewUserEmail] = useState('');
   const [newUserRole, setNewUserRole] = useState('dc');
   const [userError, setUserError] = useState('');
   const [userSuccess, setUserSuccess] = useState('');
-
-  // User management (master admin)
   const [allUsers, setAllUsers] = useState([]);
-  const [showUsers, setShowUsers] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(null);
 
   // Event editing
@@ -62,9 +93,15 @@ export function AdminDashboard() {
     apiRequest('/auth/users/poc').then(setPocUsers).catch(() => { });
   }, []);
 
-  const updateQuestion = (index, value) => {
+  useEffect(() => {
+    if (activeTab === 'logs') loadLogs();
+    if (activeTab === 'users' && isMasterAdmin) loadUsers();
+    if (activeTab === 'events') loadEvents();
+  }, [activeTab, isMasterAdmin]);
+
+  const updateQuestion = (index, field, value) => {
     const next = [...questions];
-    next[index] = value;
+    next[index] = { ...next[index], [field]: value };
     setQuestions(next);
   };
 
@@ -72,7 +109,7 @@ export function AdminDashboard() {
     setQuestions(questions.filter((_, i) => i !== index));
   };
 
-  const addQuestion = () => setQuestions([...questions, '']);
+  const addQuestion = () => setQuestions([...questions, { text: '', isRollNumber: false }]);
 
   const handleCreateEvent = async (e) => {
     e.preventDefault();
@@ -84,31 +121,22 @@ export function AdminDashboard() {
           name,
           description,
           questions: questions
-            .filter((q) => q.trim())
-            .map((q) => ({ text: q.trim(), required: true })),
+            .filter((q) => q.text.trim())
+            .map((q) => ({ text: q.text.trim(), required: true, isRollNumber: q.isRollNumber })),
           pocUserIds: selectedPocIds,
           deadline: deadline || undefined,
         }),
       });
       setName('');
       setDescription('');
-      setQuestions(['']);
+      setQuestions([{ text: '', isRollNumber: false }]);
       setSelectedPocIds([]);
       setDeadline('');
+      setActiveTab('events');
       await loadEvents();
     } catch (err) {
       setError('Failed to create event');
     }
-  };
-
-  const handleToggleLogs = () => {
-    if (!showLogs) loadLogs();
-    setShowLogs(!showLogs);
-  };
-
-  const handleToggleUsers = () => {
-    if (!showUsers) loadUsers();
-    setShowUsers(!showUsers);
   };
 
   const handleCreateUser = async (e) => {
@@ -125,14 +153,14 @@ export function AdminDashboard() {
         }),
       });
       const roleLabel = data.role === 'dc' ? 'Department Coordinator' : data.role === 'poc' ? 'Person of Contact' : data.role.toUpperCase();
-      setUserSuccess(`✅ ${roleLabel} "${data.name}" created successfully!`);
+      setUserSuccess(`${roleLabel} "${data.name}" created successfully.`);
       setNewUserName('');
       setNewUserEmail('');
       setNewUserRole('dc');
       if (data.role === 'poc') {
         apiRequest('/auth/users/poc').then(setPocUsers).catch(() => { });
       }
-      if (showUsers) loadUsers();
+      loadUsers();
     } catch (err) {
       try {
         const msg = JSON.parse(err.message);
@@ -162,31 +190,31 @@ export function AdminDashboard() {
     }
   };
 
-  // ─── Event editing ─────────────────────────────────────────────
   const startEditEvent = async (eventId) => {
     const data = await apiRequest(`/events/${eventId}`);
     setEditingEvent(data);
     setEditName(data.name || '');
     setEditDescription(data.description || '');
-    setEditQuestions(data.questions.map((q) => q.text));
+    setEditQuestions(data.questions.map((q) => ({ text: q.text, isRollNumber: q.isRollNumber || false })));
     setEditDeadline(data.deadline ? new Date(data.deadline).toISOString().slice(0, 16) : '');
     setEditPocIds((data.pocUsers || []).map((p) => p._id || p));
     setEditMsg('');
+    setActiveTab('create'); // reuse create tab for edit form
   };
 
   const cancelEditEvent = () => {
     setEditingEvent(null);
     setEditMsg('');
+    setActiveTab('events');
   };
 
-  const updateEditQuestion = (idx, val) => {
+  const updateEditQuestion = (idx, field, val) => {
     const next = [...editQuestions];
-    next[idx] = val;
+    next[idx] = { ...next[idx], [field]: val };
     setEditQuestions(next);
   };
 
-  const addEditQuestion = () => setEditQuestions([...editQuestions, '']);
-
+  const addEditQuestion = () => setEditQuestions([...editQuestions, { text: '', isRollNumber: false }]);
   const removeEditQuestion = (idx) => setEditQuestions(editQuestions.filter((_, i) => i !== idx));
 
   const handleSaveEdit = async (e) => {
@@ -200,16 +228,19 @@ export function AdminDashboard() {
           name: editName,
           description: editDescription,
           questions: editQuestions
-            .filter((q) => q.trim())
-            .map((q) => ({ text: q.trim(), required: true })),
+            .filter((q) => q.text.trim())
+            .map((q) => ({ text: q.text.trim(), required: true, isRollNumber: q.isRollNumber })),
           pocUserIds: editPocIds,
           deadline: editDeadline || undefined,
         }),
       });
-      setEditMsg('✅ Event updated successfully!');
+      setEditMsg('Event updated successfully.');
       await loadEvents();
+      setTimeout(() => {
+        cancelEditEvent();
+      }, 1500);
     } catch {
-      setEditMsg('❌ Failed to save changes');
+      setEditMsg('Failed to save changes.');
     } finally {
       setEditSaving(false);
     }
@@ -221,12 +252,6 @@ export function AdminDashboard() {
   };
 
   const getRoleBadge = (role) => {
-    const colors = {
-      masterAdmin: '#a855f7',
-      admin: '#F2A332',
-      poc: '#4ecdc4',
-      dc: '#F2A332',
-    };
     const labels = {
       masterAdmin: 'MASTER',
       admin: 'ADMIN',
@@ -234,10 +259,7 @@ export function AdminDashboard() {
       dc: 'DC',
     };
     return (
-      <span className="comic-badge" style={{
-        background: colors[role] || '#ccc',
-        color: role === 'dc' ? '#222' : '#fff',
-      }}>
+      <span className="status-badge" style={{ backgroundColor: '#2C2C2E', color: role === 'masterAdmin' || role === 'admin' ? '#F2A332' : '#ffffff' }}>
         {labels[role] || role}
       </span>
     );
@@ -245,263 +267,261 @@ export function AdminDashboard() {
 
   return (
     <div className="page">
-      <h2>{isMasterAdmin ? '👑 Master Admin HQ' : '🛡️ Admin HQ'}</h2>
-      <div className="layout-two">
-        <div className="card" style={{ maxWidth: '100%' }}>
-          <h3>📝 Create New Event</h3>
-          <form onSubmit={handleCreateEvent}>
-            <label>
-              Event Name
-              <input value={name} onChange={(e) => setName(e.target.value)} required placeholder="Give your event a name..." />
-            </label>
-            <label>
-              Description
-              <textarea
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                rows={3}
-                placeholder="Describe this event..."
-              />
-            </label>
-            <label>
-              ⏰ Deadline
-              <input type="datetime-local" value={deadline} onChange={(e) => setDeadline(e.target.value)} />
-            </label>
-            <div>
-              <div style={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 8, fontSize: '0.95rem' }}>
-                ❓ Questions
-              </div>
-              {questions.map((q, idx) => (
-                <div key={idx} style={{ display: 'flex', gap: 8, marginBottom: 8, alignItems: 'center' }}>
-                  <span style={{
-                    fontFamily: "'Bangers', cursive", background: '#222', color: '#F2A332',
-                    width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    flexShrink: 0, fontSize: '0.9rem', border: '2px solid #000',
-                  }}>{idx + 1}</span>
-                  <input value={q} onChange={(e) => updateQuestion(idx, e.target.value)} placeholder={`Question ${idx + 1}`} style={{ flex: 1 }} />
-                  {questions.length > 1 && (
-                    <button type="button" onClick={() => removeQuestion(idx)} style={{ background: '#dc2626', color: '#fff', padding: '4px 10px', fontSize: '0.8rem' }}>✕</button>
-                  )}
-                </div>
-              ))}
-              <button type="button" onClick={addQuestion} style={{ fontSize: '0.85rem' }}>+ Add Question</button>
-            </div>
-            <div>
-              <div style={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 8, fontSize: '0.95rem' }}>
-                👤 Assign Person of Contact(s)
-              </div>
-              <div style={{ maxHeight: 160, overflowY: 'auto', border: '3px solid #1a1a2e', padding: 10, background: '#1e1e1e' }}>
-                {pocUsers.length === 0 && <div className="muted">No Person of Contact users found</div>}
-                {pocUsers.map((poc) => (
-                  <label key={poc._id} className="label-inline">
-                    <input
-                      type="checkbox"
-                      checked={selectedPocIds.includes(poc._id)}
-                      onChange={(e) => {
-                        if (e.target.checked) setSelectedPocIds([...selectedPocIds, poc._id]);
-                        else setSelectedPocIds(selectedPocIds.filter((id) => id !== poc._id));
-                      }}
-                    />
-                    <span style={{ fontWeight: 700 }}>{poc.name}</span>
-                    <span className="muted">{poc.email}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-            {error && <div className="error">💥 {error}</div>}
-            <button type="submit">🚀 Create Event!</button>
-          </form>
-        </div>
-        <div>
-          <h3>📋 Active Events</h3>
-          {events.length === 0 && <p className="muted">No events created yet.</p>}
-          <ul className="list">
-            {events.map((ev) => (
-              <li key={ev._id} className="list-item" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 8 }}>
-                <div style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <strong>{ev.name}</strong>
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                    <button onClick={() => startEditEvent(ev._id)} style={{ fontSize: '0.8rem', padding: '4px 10px' }}>
-                      ✏️ Edit
-                    </button>
-                    <a href={`/events/${ev._id}/responses`}>View Responses</a>
-                  </div>
-                </div>
-                {ev.description && <div className="muted">{ev.description}</div>}
-                {ev.deadline && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span className={`comic-badge ${new Date() > new Date(ev.deadline) ? 'expired' : ''}`}>
-                      ⏰ {formatDate(ev.deadline)}
-                    </span>
-                    {new Date() > new Date(ev.deadline) && (
-                      <span className="comic-badge expired">Expired</span>
-                    )}
-                  </div>
-                )}
-              </li>
-            ))}
-          </ul>
-        </div>
+      {/* Desktop Sidebar */}
+      <div className="desktop-sidebar">
+        <button className={`sidebar-item ${activeTab === 'events' ? 'active' : ''}`} onClick={() => setActiveTab('events')}>
+          <Icons.Events /> Active Events
+        </button>
+        <button className={`sidebar-item ${activeTab === 'create' ? 'active' : ''}`} onClick={() => { setEditingEvent(null); setActiveTab('create'); }}>
+          <Icons.Create /> Create Event
+        </button>
+        {isMasterAdmin && (
+          <button className={`sidebar-item ${activeTab === 'users' ? 'active' : ''}`} onClick={() => setActiveTab('users')}>
+            <Icons.Users /> Manage Users
+          </button>
+        )}
+        <button className={`sidebar-item ${activeTab === 'logs' ? 'active' : ''}`} onClick={() => setActiveTab('logs')}>
+          <Icons.Logs /> Activity Logs
+        </button>
       </div>
 
-      {/* Edit Event Section */}
-      {editingEvent && (
-        <div className="card" style={{ marginTop: 24, maxWidth: 600 }}>
-          <h3>✏️ Edit Event: {editingEvent.name}</h3>
-          <form onSubmit={handleSaveEdit}>
-            <label>
-              Event Name
-              <input value={editName} onChange={(e) => setEditName(e.target.value)} required />
-            </label>
-            <label>
-              Description
-              <textarea value={editDescription} onChange={(e) => setEditDescription(e.target.value)} rows={3} />
-            </label>
-            <label>
-              ⏰ Deadline
-              <input type="datetime-local" value={editDeadline} onChange={(e) => setEditDeadline(e.target.value)} />
-            </label>
-            <div>
-              <div style={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 8, fontSize: '0.95rem' }}>
-                ❓ Questions (add, edit, or remove)
-              </div>
-              {editQuestions.map((q, idx) => (
-                <div key={idx} style={{ display: 'flex', gap: 8, marginBottom: 8, alignItems: 'center' }}>
-                  <span style={{
-                    fontFamily: "'Bangers', cursive", background: '#222', color: '#F2A332',
-                    width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    flexShrink: 0, fontSize: '0.9rem', border: '2px solid #000',
-                  }}>{idx + 1}</span>
-                  <input value={q} onChange={(e) => updateEditQuestion(idx, e.target.value)} placeholder={`Question ${idx + 1}`} style={{ flex: 1 }} />
-                  {editQuestions.length > 1 && (
-                    <button type="button" onClick={() => removeEditQuestion(idx)} style={{ background: '#dc2626', color: '#fff', padding: '4px 10px', fontSize: '0.8rem' }}>✕</button>
+      <div className="desktop-main-with-sidebar">
+        {/* EVENTS TAB */}
+        {activeTab === 'events' && (
+          <div>
+            <h2>Active Events</h2>
+            {events.length === 0 && <p className="muted">No events created yet.</p>}
+            <ul className="list">
+              {events.map((ev) => (
+                <li key={ev._id} className="list-item" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 12 }}>
+                  <div style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <strong>{ev.name}</strong>
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                      <button onClick={() => startEditEvent(ev._id)} style={{ padding: '8px 12px', fontSize: '0.85rem' }}>
+                        Edit
+                      </button>
+                      <a href={`/events/${ev._id}/responses`} style={{ padding: '8px 12px', fontSize: '0.85rem', border: '1px solid var(--border)', borderRadius: '12px', color: 'var(--text-primary)' }}>Responses</a>
+                    </div>
+                  </div>
+                  {ev.description && <div className="muted">{ev.description}</div>}
+                  {ev.deadline && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span className={`status-badge ${new Date() > new Date(ev.deadline) ? 'expired' : ''}`}>
+                        Deadline: {formatDate(ev.deadline)}
+                      </span>
+                    </div>
                   )}
-                </div>
+                </li>
               ))}
-              <button type="button" onClick={addEditQuestion} style={{ fontSize: '0.85rem' }}>+ Add Question</button>
-            </div>
-            <div>
-              <div style={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 8, fontSize: '0.95rem' }}>
-                👤 Assign Person of Contact(s)
-              </div>
-              <div style={{ maxHeight: 160, overflowY: 'auto', border: '3px solid #1a1a2e', padding: 10, background: '#1e1e1e' }}>
-                {pocUsers.length === 0 && <div className="muted">No Person of Contact users found</div>}
-                {pocUsers.map((poc) => (
-                  <label key={poc._id} className="label-inline">
-                    <input
-                      type="checkbox"
-                      checked={editPocIds.includes(poc._id)}
-                      onChange={(e) => {
-                        if (e.target.checked) setEditPocIds([...editPocIds, poc._id]);
-                        else setEditPocIds(editPocIds.filter((id) => id !== poc._id));
-                      }}
-                    />
-                    <span style={{ fontWeight: 700 }}>{poc.name}</span>
-                    <span className="muted">{poc.email}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-            {editMsg && (
-              <div style={{
-                padding: '8px 14px', fontWeight: 700, fontSize: '0.9rem',
-                background: editMsg.startsWith('✅') ? '#4ecdc4' : '#dc2626',
-                color: '#fff', border: '3px solid #1a1a2e', boxShadow: '3px 3px 0 #1a1a2e',
-              }}>
-                {editMsg}
-              </div>
-            )}
-            <div style={{ display: 'flex', gap: 10 }}>
-              <button type="submit" disabled={editSaving}>{editSaving ? '⏳ Saving...' : '💾 Save Changes'}</button>
-              <button type="button" onClick={cancelEditEvent} style={{ background: '#999' }}>Cancel</button>
-            </div>
-          </form>
-        </div>
-      )}
+            </ul>
+          </div>
+        )}
 
-      {/* Add User Section */}
-      <div style={{ marginTop: 40 }}>
-        <button onClick={() => setShowAddUser(!showAddUser)}>
-          {showAddUser ? '🙈 Hide User Form' : '👥 Add New User'}
-        </button>
-        {showAddUser && (
-          <div className="card" style={{ marginTop: 16, maxWidth: 500 }}>
-            <h3>👥 Add New User</h3>
-            <form onSubmit={handleCreateUser}>
+        {/* CREATE / EDIT TAB */}
+        {activeTab === 'create' && !editingEvent && (
+          <div className="card">
+            <h2>Create New Event</h2>
+            <form onSubmit={handleCreateEvent}>
               <label>
-                Name
-                <input value={newUserName} onChange={(e) => setNewUserName(e.target.value)} required placeholder="Full name" />
+                Event Name
+                <input value={name} onChange={(e) => setName(e.target.value)} required placeholder="Give your event a name..." />
               </label>
               <label>
-                📧 Email
-                <input type="email" value={newUserEmail} onChange={(e) => setNewUserEmail(e.target.value)} required placeholder="user@nitt.edu" />
+                Description
+                <textarea
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  rows={3}
+                  placeholder="Describe this event..."
+                />
               </label>
               <label>
-                🎭 Role
-                <select value={newUserRole} onChange={(e) => setNewUserRole(e.target.value)} style={{
-                  padding: '10px 14px', border: '3px solid #1a1a2e', background: '#1e1e1e',
-                  fontSize: '1rem', fontFamily: "'Inter', cursive",
-                }}>
-                  <option value="dc">Department Coordinator (DC)</option>
-                  <option value="poc">Person of Contact (POC)</option>
-                  {isMasterAdmin && <option value="admin">Admin</option>}
-                </select>
+                Deadline
+                <input type="datetime-local" value={deadline} onChange={(e) => setDeadline(e.target.value)} />
               </label>
-              {userError && <div className="error">💥 {userError}</div>}
-              {userSuccess && (
-                <div style={{
-                  background: '#4ecdc4', color: '#fff', border: '3px solid #1a1a2e',
-                  padding: '8px 14px', fontWeight: 700, fontSize: '0.9rem', boxShadow: '3px 3px 0 #1a1a2e',
-                }}>
-                  {userSuccess}
+              <div>
+                <div style={{ fontWeight: 600, color: 'var(--grey-text)', marginBottom: 12 }}>
+                  Questions
                 </div>
-              )}
-              <button type="submit">🚀 Create User!</button>
+                {questions.map((q, idx) => (
+                  <div key={idx} style={{ display: 'flex', gap: 12, marginBottom: 12, alignItems: 'center' }}>
+                    <span style={{
+                      color: 'var(--gold)',
+                      width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      flexShrink: 0, fontSize: '0.9rem', border: '1px solid var(--gold)', borderRadius: '50%'
+                    }}>{idx + 1}</span>
+                    <input value={q.text} onChange={(e) => updateQuestion(idx, 'text', e.target.value)} placeholder={`Question ${idx + 1}`} style={{ flex: 1 }} />
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, margin: 0, fontSize: '0.85rem', flexDirection: 'row' }}>
+                      <input type="checkbox" checked={q.isRollNumber} onChange={(e) => updateQuestion(idx, 'isRollNumber', e.target.checked)} />
+                      Roll No
+                    </label>
+                    {questions.length > 1 && (
+                      <button type="button" onClick={() => removeQuestion(idx)} style={{ color: 'var(--red)', background: 'transparent', padding: '8px' }}>✕</button>
+                    )}
+                  </div>
+                ))}
+                <button type="button" onClick={addQuestion} style={{ fontSize: '0.85rem', padding: '8px 16px', background: 'var(--bg-card)' }}>+ Add Question</button>
+              </div>
+              <div>
+                <div style={{ fontWeight: 600, color: 'var(--grey-text)', marginBottom: 12, marginTop: 12 }}>
+                  Assign Person of Contact(s)
+                </div>
+                <div style={{ maxHeight: 180, overflowY: 'auto', border: '1px solid var(--border)', borderRadius: '12px', padding: 16, background: 'var(--bg-input)' }}>
+                  {pocUsers.length === 0 && <div className="muted">No Person of Contact users found</div>}
+                  {pocUsers.map((poc) => (
+                    <label key={poc._id} className="label-inline" style={{ marginBottom: 12 }}>
+                      <input
+                        type="checkbox"
+                        checked={selectedPocIds.includes(poc._id)}
+                        onChange={(e) => {
+                          if (e.target.checked) setSelectedPocIds([...selectedPocIds, poc._id]);
+                          else setSelectedPocIds(selectedPocIds.filter((id) => id !== poc._id));
+                        }}
+                      />
+                      <span style={{ fontWeight: 600 }}>{poc.name}</span>
+                      <span className="muted" style={{ marginLeft: 'auto' }}>{poc.email}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+              {error && <div className="error">{error}</div>}
+              <button type="submit" style={{ marginTop: 12 }}>Create Event</button>
             </form>
           </div>
         )}
-      </div>
 
-      {/* Manage Users (master admin only) */}
-      {isMasterAdmin && (
-        <div style={{ marginTop: 40 }}>
-          <button onClick={handleToggleUsers}>
-            {showUsers ? '🙈 Hide Users' : '👥 Manage Users'}
-          </button>
-          {showUsers && (
-            <div style={{ marginTop: 16 }}>
-              <button onClick={loadUsers} style={{ marginBottom: 12, fontSize: '0.85rem' }}>🔄 Refresh</button>
+        {/* EDIT EVENT FORM */}
+        {activeTab === 'create' && editingEvent && (
+          <div className="card">
+            <h2>Edit Event: {editingEvent.name}</h2>
+            <form onSubmit={handleSaveEdit}>
+              <label>
+                Event Name
+                <input value={editName} onChange={(e) => setEditName(e.target.value)} required />
+              </label>
+              <label>
+                Description
+                <textarea value={editDescription} onChange={(e) => setEditDescription(e.target.value)} rows={3} />
+              </label>
+              <label>
+                Deadline
+                <input type="datetime-local" value={editDeadline} onChange={(e) => setEditDeadline(e.target.value)} />
+              </label>
+              <div>
+                <div style={{ fontWeight: 600, color: 'var(--grey-text)', marginBottom: 12 }}>
+                  Questions
+                </div>
+                {editQuestions.map((q, idx) => (
+                  <div key={idx} style={{ display: 'flex', gap: 12, marginBottom: 12, alignItems: 'center' }}>
+                    <span style={{
+                      color: 'var(--gold)',
+                      width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      flexShrink: 0, fontSize: '0.9rem', border: '1px solid var(--gold)', borderRadius: '50%'
+                    }}>{idx + 1}</span>
+                    <input value={q.text} onChange={(e) => updateEditQuestion(idx, 'text', e.target.value)} placeholder={`Question ${idx + 1}`} style={{ flex: 1 }} />
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, margin: 0, fontSize: '0.85rem', flexDirection: 'row' }}>
+                      <input type="checkbox" checked={q.isRollNumber} onChange={(e) => updateEditQuestion(idx, 'isRollNumber', e.target.checked)} />
+                      Roll No
+                    </label>
+                    {editQuestions.length > 1 && (
+                      <button type="button" onClick={() => removeEditQuestion(idx)} style={{ color: 'var(--red)', background: 'transparent', padding: '8px' }}>✕</button>
+                    )}
+                  </div>
+                ))}
+                <button type="button" onClick={addEditQuestion} style={{ fontSize: '0.85rem', padding: '8px 16px', background: 'var(--bg-card)' }}>+ Add Question</button>
+              </div>
+              <div>
+                <div style={{ fontWeight: 600, color: 'var(--grey-text)', marginBottom: 12, marginTop: 12 }}>
+                  Assign Person of Contact(s)
+                </div>
+                <div style={{ maxHeight: 180, overflowY: 'auto', border: '1px solid var(--border)', borderRadius: '12px', padding: 16, background: 'var(--bg-input)' }}>
+                  {pocUsers.length === 0 && <div className="muted">No POCs found</div>}
+                  {pocUsers.map((poc) => (
+                    <label key={poc._id} className="label-inline" style={{ marginBottom: 12 }}>
+                      <input
+                        type="checkbox"
+                        checked={editPocIds.includes(poc._id)}
+                        onChange={(e) => {
+                          if (e.target.checked) setEditPocIds([...editPocIds, poc._id]);
+                          else setEditPocIds(editPocIds.filter((id) => id !== poc._id));
+                        }}
+                      />
+                      <span style={{ fontWeight: 600 }}>{poc.name}</span>
+                      <span className="muted" style={{ marginLeft: 'auto' }}>{poc.email}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+              {editMsg && (
+                <div className={editMsg.includes('success') ? 'success-msg' : 'error'}>
+                  {editMsg}
+                </div>
+              )}
+              <div style={{ display: 'flex', gap: 16, marginTop: 12 }}>
+                <button type="submit" disabled={editSaving} style={{ flex: 1 }}>{editSaving ? 'Saving...' : 'Save Changes'}</button>
+                <button type="button" onClick={cancelEditEvent} style={{ background: 'var(--bg-input)', color: 'var(--text-primary)', flex: 1 }}>Cancel</button>
+              </div>
+            </form>
+          </div>
+        )}
+
+        {/* USERS TAB */}
+        {activeTab === 'users' && isMasterAdmin && (
+          <div className="layout-two">
+            <div className="card">
+              <h2>Add New User</h2>
+              <form onSubmit={handleCreateUser}>
+                <label>
+                  Name
+                  <input value={newUserName} onChange={(e) => setNewUserName(e.target.value)} required placeholder="Full name" />
+                </label>
+                <label>
+                  Email
+                  <input type="email" value={newUserEmail} onChange={(e) => setNewUserEmail(e.target.value)} required placeholder="user@nitt.edu" />
+                </label>
+                <label>
+                  Role
+                  <select value={newUserRole} onChange={(e) => setNewUserRole(e.target.value)}>
+                    <option value="dc">Department Coordinator (DC)</option>
+                    <option value="poc">Person of Contact (POC)</option>
+                    <option value="admin">Admin</option>
+                  </select>
+                </label>
+                {userError && <div className="error">{userError}</div>}
+                {userSuccess && <div className="success-msg">{userSuccess}</div>}
+                <button type="submit">Create User</button>
+              </form>
+            </div>
+            <div>
+              <h3>Manage Users</h3>
               {allUsers.length === 0 && <p className="muted">No users found.</p>}
               {allUsers.length > 0 && (
                 <div className="table-wrap">
                   <table className="table">
                     <thead>
                       <tr>
-                        <th>👤 Name</th>
-                        <th>📧 Email</th>
-                        <th>🎭 Role</th>
-                        <th>📅 Created</th>
-                        <th>⚡ Actions</th>
+                        <th>Name</th>
+                        <th>Role</th>
+                        <th>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
                       {allUsers.map((u) => (
                         <tr key={u._id}>
-                          <td>{u.name}</td>
-                          <td>{u.email}</td>
-                          <td>{getRoleBadge(u.role)}</td>
-                          <td style={{ whiteSpace: 'nowrap' }}>{formatDate(u.createdAt)}</td>
                           <td>
-                            {u.role !== 'masterAdmin' ? (
+                            <div style={{ fontWeight: 500 }}>{u.name}</div>
+                            <div className="muted">{u.email}</div>
+                          </td>
+                          <td>{getRoleBadge(u.role)}</td>
+                          <td>
+                            {u.role !== 'masterAdmin' && (
                               <button
                                 onClick={() => handleDeleteUser(u._id, u.name)}
                                 disabled={deleteLoading === u._id}
-                                style={{ background: '#dc2626', color: '#fff', padding: '4px 10px', fontSize: '0.8rem' }}
+                                style={{ color: 'var(--red)', background: 'transparent', padding: '8px 12px', fontSize: '0.85rem' }}
                               >
-                                {deleteLoading === u._id ? '⏳' : '🗑️ Delete'}
+                                {deleteLoading === u._id ? '⏳' : 'Delete'}
                               </button>
-                            ) : (
-                              <span className="muted">—</span>
                             )}
                           </td>
                         </tr>
@@ -511,39 +531,35 @@ export function AdminDashboard() {
                 </div>
               )}
             </div>
-          )}
-        </div>
-      )}
+          </div>
+        )}
 
-      {/* Activity Logs */}
-      <div style={{ marginTop: 40 }}>
-        <button onClick={handleToggleLogs}>
-          {showLogs ? '🙈 Hide Logs' : '📜 View Activity Logs'}
-        </button>
-        {showLogs && (
-          <div style={{ marginTop: 16 }}>
-            <button onClick={loadLogs} style={{ marginBottom: 12, fontSize: '0.85rem' }}>🔄 Refresh</button>
+        {/* LOGS TAB */}
+        {activeTab === 'logs' && (
+          <div>
+            <h2>Activity Logs</h2>
             {logs.length === 0 && <p className="muted">No activity logged yet.</p>}
             {logs.length > 0 && (
               <div className="table-wrap">
                 <table className="table">
                   <thead>
                     <tr>
-                      <th>⏰ Time</th>
-                      <th>⚡ Action</th>
-                      <th>👤 User</th>
-                      <th>📋 Event</th>
-                      <th>📝 Details</th>
+                      <th>Time</th>
+                      <th>Action</th>
+                      <th>User</th>
+                      <th>Details</th>
                     </tr>
                   </thead>
                   <tbody>
                     {logs.map((l) => (
                       <tr key={l._id}>
-                        <td style={{ whiteSpace: 'nowrap' }}>{formatDate(l.createdAt)}</td>
-                        <td><span className="comic-badge success">{l.action}</span></td>
-                        <td>{l.user?.name} <span className="muted">({l.user?.role})</span></td>
-                        <td>{l.event?.name || '—'}</td>
-                        <td>{l.details}</td>
+                        <td style={{ whiteSpace: 'nowrap', fontSize: '0.85rem', color: 'var(--grey-text)' }}>{formatDate(l.createdAt)}</td>
+                        <td><span className="status-badge success" style={{ background: 'rgba(48, 209, 88, 0.1)' }}>{l.action}</span></td>
+                        <td>
+                          <div style={{ fontWeight: 500 }}>{l.user?.name}</div>
+                          <div style={{ fontSize: '0.8rem', color: 'var(--grey-text)' }}>{l.user?.role}</div>
+                        </td>
+                        <td style={{ fontSize: '0.9rem' }}>{l.details}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -552,6 +568,28 @@ export function AdminDashboard() {
             )}
           </div>
         )}
+      </div>
+
+      {/* Mobile Bottom Navigation */}
+      <div className="bottom-nav">
+        <button className={`nav-item ${activeTab === 'events' ? 'active' : ''}`} onClick={() => setActiveTab('events')}>
+          <Icons.Events />
+          <span>Events</span>
+        </button>
+        <button className={`nav-item ${activeTab === 'create' ? 'active' : ''}`} onClick={() => setActiveTab('create')}>
+          <Icons.Create />
+          <span>Create</span>
+        </button>
+        {isMasterAdmin && (
+          <button className={`nav-item ${activeTab === 'users' ? 'active' : ''}`} onClick={() => setActiveTab('users')}>
+            <Icons.Users />
+            <span>Users</span>
+          </button>
+        )}
+        <button className={`nav-item ${activeTab === 'logs' ? 'active' : ''}`} onClick={() => setActiveTab('logs')}>
+          <Icons.Logs />
+          <span>Logs</span>
+        </button>
       </div>
     </div>
   );

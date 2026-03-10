@@ -33,37 +33,32 @@ export function LoginPage() {
   return (
     <div className="centered-page">
       <div className="card" style={{ maxWidth: 420 }}>
-        <div style={{ textAlign: 'center', marginBottom: 16 }}>
-          <img src="/nf-logo.png" alt="NF" style={{ height: 80, filter: 'drop-shadow(0 0 20px rgba(242, 163, 50, 0.5))' }} />
+        <div style={{ textAlign: 'center', marginBottom: 24 }}>
+          <img src="/nf-logo.png" alt="NF" style={{ height: 60, opacity: 0.9 }} />
         </div>
-        <div style={{ textAlign: 'center', marginBottom: 8 }}>
+        <div style={{ textAlign: 'center', marginBottom: 12 }}>
           <span style={{
-            fontFamily: "'Bangers', cursive",
-            fontSize: '2.4rem',
-            color: '#FFD700',
-            textShadow: '2px 2px 0 rgba(0,0,0,0.5)',
-            letterSpacing: '4px',
+            fontWeight: 700,
+            fontSize: '1.8rem',
+            color: 'var(--gold)',
+            letterSpacing: '-0.5px',
           }}>
             NF Forms
           </span>
         </div>
         <div style={{
-          background: 'linear-gradient(135deg, #F2A332, #e6952a)',
-          color: '#000',
-          fontFamily: "'Bangers', cursive",
-          fontSize: '1.2rem',
+          color: 'var(--grey-text)',
+          fontWeight: 500,
+          fontSize: '1rem',
           textAlign: 'center',
-          padding: '10px',
-          marginBottom: 20,
-          borderRadius: '6px',
-          letterSpacing: '2px',
+          marginBottom: 32,
         }}>
-          Sign In to Continue!
+          Sign in to continue
         </div>
 
         <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
           {loading ? (
-            <div style={{ padding: '10px', color: '#fff' }}>⏳ Logging in...</div>
+            <div style={{ padding: '10px', color: 'var(--grey-text)' }}>Logging in...</div>
           ) : (
             <GoogleLogin
               onSuccess={handleGoogleSuccess}
@@ -75,7 +70,7 @@ export function LoginPage() {
           )}
         </div>
 
-        {error && <div className="error" style={{ textAlign: 'center', marginTop: '10px' }}>{error}</div>}
+        {error && <div className="error" style={{ textAlign: 'center', marginTop: '16px' }}>{error}</div>}
       </div>
     </div>
   );

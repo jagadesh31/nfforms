@@ -20,12 +20,6 @@ function Layout({ children }) {
   };
 
   const getRoleBadge = (role) => {
-    const colors = {
-      masterAdmin: '#a855f7',
-      admin: '#F2A332',
-      poc: '#4ecdc4',
-      dc: '#FFD700',
-    };
     const labels = {
       masterAdmin: 'MASTER',
       admin: 'ADMIN',
@@ -33,23 +27,12 @@ function Layout({ children }) {
       dc: 'DC',
     };
     return (
-      <span
-        style={{
-          background: colors[role] || '#555',
-          color: role === 'dc' ? '#000' : '#fff',
-          fontFamily: "'Bangers', cursive",
-          padding: '3px 10px',
-          borderRadius: '4px',
-          letterSpacing: '1.5px',
-          textTransform: 'uppercase',
-          fontSize: '0.75rem',
-          fontWeight: 700,
-        }}
-      >
+      <span className="status-badge" style={{ backgroundColor: '#2C2C2E', color: role === 'masterAdmin' || role === 'admin' ? '#F2A332' : '#ffffff', border: '1px solid var(--border)' }}>
         {labels[role] || role}
       </span>
     );
   };
+
 
   return (
     <div>
