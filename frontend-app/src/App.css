@@ -78,10 +78,9 @@ body {
 
 /* --- Main Layout --- */
 main {
-  max-width: 800px;
+  max-width: 1000px;
   margin: 0 auto;
   padding: 24px 20px 80px 20px;
-  /* buffer for bottom nav */
 }
 
 /* --- Page Headings --- */
@@ -381,6 +380,80 @@ a {
 
 .nav-item.active .nav-icon {
   stroke: var(--gold);
+}
+
+/* --- Admin Dashboard Layouts --- */
+.desktop-sidebar {
+  display: none;
+}
+
+@media (min-width: 768px) {
+
+  /* Hide bottom nav on desktop */
+  .bottom-nav {
+    display: none !important;
+  }
+
+  main {
+    padding-bottom: 24px;
+    /* remove bottom nav buffer on desktop */
+  }
+
+  /* Make sure if .page contains a sidebar we flex it */
+  .page:has(.desktop-sidebar) {
+    display: flex;
+    gap: 32px;
+    align-items: flex-start;
+  }
+
+  .desktop-sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 220px;
+    flex-shrink: 0;
+    position: sticky;
+    top: 90px;
+  }
+
+  .desktop-main-with-sidebar {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .sidebar-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    background: transparent;
+    color: var(--grey-text);
+    border: none;
+    border-radius: 12px;
+    font-size: 1rem;
+    font-weight: 500;
+    cursor: pointer;
+    text-align: left;
+    transition: all 0.2s;
+  }
+
+  .sidebar-item:hover {
+    background: var(--bg-panel);
+    color: var(--text-primary);
+  }
+
+  .sidebar-item.active {
+    background: var(--bg-card);
+    color: var(--gold);
+    font-weight: 600;
+  }
+
+  .sidebar-item .nav-icon {
+    width: 20px;
+    height: 20px;
+    stroke: currentColor;
+    stroke-width: 2;
+  }
 }
 
 /* Utilities */
