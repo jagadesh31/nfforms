@@ -1,15 +1,12 @@
 const express = require('express');
-const axios = require('axios');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const { auth, requireRole } = require('../middleware/auth');
+const { OAuth2Client } = require('google-auth-library');
 
 const router = express.Router();
 
-const DAUTH_BASE = 'https://auth.delta.nitt.edu'; // Kept for reference but not used
 const MASTER_ADMIN_EMAIL = '112125005@nitt.edu';
-
-const { OAuth2Client } = require('google-auth-library');
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 // ─── Google Login ────────────────────────────────────────────────
@@ -66,8 +63,8 @@ router.post('/google-login', async (req, res) => {
       user: { id: user._id, name: user.name, email: user.email, role: user.role },
     });
   } catch (err) {
-    console.error('Google login error:', err.message);
-    res.status(500).json({ message: 'Authentication failed' });
+    console.error('Google login error:', err.message, err.stack);
+    res.status(500).json({ message: 'Authentication failed', error: err.message });
   }
 });
 

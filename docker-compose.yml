@@ -17,33 +17,20 @@ services:
     container_name: nfforms-backend
     ports:
       - "5000:5000"
+    env_file:
+      - ./backend/.env
     environment:
       - MONGO_URI=mongodb://mongo:27017/nfforms
-      - JWT_SECRET=supersecretjwtkey
-      - PORT=5000
-      - DAUTH_CLIENT_ID=05V9-VeOw83hhpbl
-      - DAUTH_CLIENT_SECRET=aoee97_VZrIISxGeD-XKAKlyFf2wCg-H
-      - DAUTH_REDIRECT_URI=${DAUTH_REDIRECT_URI:-http://localhost:3000/auth/callback}
-      - CLIENT_ORIGIN=${CLIENT_ORIGIN:-http://localhost:3000}
     depends_on:
       - mongo
     restart: unless-stopped
-
-  seed:
-    build: ./backend
-    container_name: nfforms-seed
-    command: node seed.js
-    environment:
-      - MONGO_URI=mongodb://mongo:27017/nfforms
-    depends_on:
-      - mongo
-    restart: "no"
-
+    
   frontend:
     build:
       context: ./frontend-app
       args:
-        REACT_APP_API_URL: http://localhost:5000/api
+        REACT_APP_API_URL: ${REACT_APP_API_URL:-http://localhost:5000/api}
+        REACT_APP_GOOGLE_CLIENT_ID: ${REACT_APP_GOOGLE_CLIENT_ID:-486170631932-lk7chbd259154reeqpe0a89ksb3rbr6i.apps.googleusercontent.com}
     container_name: nfforms-frontend
     ports:
       - "3000:3000"
