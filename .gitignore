@@ -1,0 +1,12 @@
+node_modules
+npm-debug.log
+backend/node_modules
+frontend/node_modules
+frontend-app/node_modules
+backend/uploads
+.env
+uploads
+docker-compose.yml
+backend/.env
+frontend-app/.env
+
