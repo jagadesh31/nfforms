@@ -13,9 +13,26 @@ export function DcDashboard() {
     return deadline && new Date() > new Date(deadline);
   };
 
+  const canFillEvent = (event) => {
+    return !isDeadlinePassed(event.deadline) && !event.alreadyFilled && !event.branchAlreadyFilled;
+  };
+
+  const canEditEvent = (event) => {
+    return !!event.alreadyFilled && !!event.canEditResponse && !isDeadlinePassed(event.deadline);
+  };
+
+  const fillableCount = events.filter(canFillEvent).length;
+
   return (
     <div className="page">
       <h2>Department Coordinator — Events</h2>
+      {events.length > 0 && (
+        <div className="card" style={{ marginBottom: 16 }}>
+          <p style={{ margin: 0, fontWeight: 700, fontSize: '1.05rem' }}>
+            You can fill {fillableCount} form{fillableCount !== 1 ? 's' : ''} right now.
+          </p>
+        </div>
+      )}
       {events.length === 0 && (
         <div className="card" style={{ textAlign: 'center', maxWidth: '100%' }}>
           <p style={{ fontWeight: 600, fontSize: '1.2rem' }}>
@@ -32,6 +49,23 @@ export function DcDashboard() {
                 <strong style={{ fontSize: '1.1rem' }}>{ev.name}</strong>
                 {isDeadlinePassed(ev.deadline) ? (
                   <span className="status-badge expired">Closed</span>
+                ) : canEditEvent(ev) ? (
+                  <Link to={`/events/${ev._id}/fill`} style={{
+                    background: 'var(--green)',
+                    color: '#000',
+                    padding: '8px 16px',
+                    borderRadius: '12px',
+                    fontWeight: 600,
+                    fontSize: '0.9rem',
+                  }}>
+                    Edit Response ({ev.remainingEdits} left)
+                  </Link>
+                ) : ev.alreadyFilled ? (
+                  <span className="status-badge" style={{ background: 'var(--green)', color: '#fff' }}>Submitted</span>
+                ) : ev.branchAlreadyFilled ? (
+                  <span className="status-badge" style={{ background: 'var(--gold)', color: '#000' }}>
+                    Branch Submitted{ev.branchFilledBy ? ` (${ev.branchFilledBy})` : ''}
+                  </span>
                 ) : (
                   <Link to={`/events/${ev._id}/fill`} style={{
                     background: 'var(--gold)',

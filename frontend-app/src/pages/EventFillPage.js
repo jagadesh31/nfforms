@@ -15,12 +15,48 @@ export function EventFillPage() {
   const [branchAlreadyFilled, setBranchAlreadyFilled] = useState(false);
   const [branchFilledBy, setBranchFilledBy] = useState('');
   const [deadlinePassed, setDeadlinePassed] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [remainingEdits, setRemainingEdits] = useState(0);
+  const [maxDcEdits, setMaxDcEdits] = useState(0);
 
   useEffect(() => {
     apiRequest(`/events/${id}`).then((data) => {
       setEvent(data);
-      setAnswers(Array(data.questions.length).fill(''));
-      if (data.alreadyFilled) setAlreadyFilled(true);
+      setMaxDcEdits(data.maxDcEdits || 0);
+
+      const initialAnswers = Array(data.questions.length).fill('');
+      const initialFileUploads = {};
+
+      if (data.response?.answers?.length) {
+        data.response.answers.forEach((ans) => {
+          const idx = ans.questionIndex;
+          if (typeof idx === 'number' && idx >= 0 && idx < data.questions.length) {
+            initialAnswers[idx] = ans.text || '';
+            if (ans.fileUrl) {
+              initialFileUploads[idx] = {
+                fileUrl: ans.fileUrl,
+                uploading: false,
+                progress: 100,
+                error: null,
+                type: ans.fileType || undefined,
+              };
+            }
+          }
+        });
+      }
+
+      setAnswers(initialAnswers);
+      setFileUploads(initialFileUploads);
+      setTeamName(data.response?.teamName || '');
+
+      if (data.alreadyFilled) {
+        const canEdit = !!data.canEditResponse;
+        setIsEditMode(canEdit);
+        setRemainingEdits(data.remainingEdits || 0);
+        if (!canEdit) {
+          setAlreadyFilled(true);
+        }
+      }
       if (data.branchAlreadyFilled) {
         setBranchAlreadyFilled(true);
         setBranchFilledBy(data.branchFilledBy || 'Another Department Coordinator');
@@ -112,13 +148,20 @@ export function EventFillPage() {
         };
       });
 
-      await apiRequest(`/events/${id}/responses`, {
-        method: 'POST',
+      const submitPath = isEditMode ? `/events/${id}/responses/me` : `/events/${id}/responses`;
+      const submitMethod = isEditMode ? 'PUT' : 'POST';
+
+      const result = await apiRequest(submitPath, {
+        method: submitMethod,
         body: JSON.stringify({
           teamName,
           answers: answersPayload,
         }),
       });
+
+      if (isEditMode) {
+        setRemainingEdits(result.remainingEdits || 0);
+      }
       navigate('/');
     } catch (err) {
       try {
@@ -198,6 +241,16 @@ export function EventFillPage() {
   return (
     <div className="page">
       <h2>{event.name}</h2>
+      <div style={{ marginBottom: 16 }}>
+        <span className="status-badge" style={{ marginRight: 8 }}>
+          Edit Limit: {maxDcEdits}
+        </span>
+        {isEditMode && (
+          <span className="status-badge">
+            Remaining Edits: {remainingEdits}
+          </span>
+        )}
+      </div>
       {event.deadline && (
         <div style={{ marginBottom: 24 }}>
           <span className="status-badge">Deadline: {new Date(event.deadline).toLocaleString()}</span>
@@ -328,7 +381,7 @@ export function EventFillPage() {
         ))}
         {error && <div className="error">{error}</div>}
         <button type="submit" disabled={submitting} style={{ marginTop: 12 }}>
-          {submitting ? 'Submitting...' : 'Submit Registration'}
+          {submitting ? (isEditMode ? 'Saving Changes...' : 'Submitting...') : (isEditMode ? 'Save Changes' : 'Submit Registration')}
         </button>
       </form>
     </div>

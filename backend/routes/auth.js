@@ -6,7 +6,10 @@ const { OAuth2Client } = require('google-auth-library');
 
 const router = express.Router();
 
-const MASTER_ADMIN_EMAIL = (process.env.MASTER_ADMIN_EMAIL || '112125005@nitt.edu').toLowerCase();
+const MASTER_ADMIN_EMAILS = (process.env.MASTER_ADMIN_EMAIL || '112125005@nitt.edu')
+  .split(',')
+  .map((email) => email.trim().toLowerCase())
+  .filter(Boolean);
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 // ─── Google Login ────────────────────────────────────────────────
@@ -36,8 +39,8 @@ router.post('/google-login', async (req, res) => {
     let user = await User.findOne({ email: normalizedEmail });
 
     if (!user) {
-      // Check if this is the master admin logging in for the first time
-      if (normalizedEmail === MASTER_ADMIN_EMAIL) {
+      // Check if this is a configured master admin logging in for the first time
+      if (MASTER_ADMIN_EMAILS.includes(normalizedEmail)) {
         user = await User.create({
           name,
           email: normalizedEmail,
