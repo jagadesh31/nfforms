@@ -13,12 +13,9 @@ export function DcDashboard() {
     return deadline && new Date() > new Date(deadline);
   };
 
+  // For new logic: allow up to maxDcSubmissions per DC, no edits
   const canFillEvent = (event) => {
-    return !isDeadlinePassed(event.deadline) && !event.alreadyFilled && !event.branchAlreadyFilled;
-  };
-
-  const canEditEvent = (event) => {
-    return !!event.alreadyFilled && !!event.canEditResponse && !isDeadlinePassed(event.deadline);
+    return !isDeadlinePassed(event.deadline) && (event.dcSubmissionCount || 0) < (event.maxDcSubmissions || 1) && !event.branchAlreadyFilled;
   };
 
   const fillableCount = events.filter(canFillEvent).length;
@@ -49,23 +46,12 @@ export function DcDashboard() {
                 <strong style={{ fontSize: '1.1rem' }}>{ev.name}</strong>
                 {isDeadlinePassed(ev.deadline) ? (
                   <span className="status-badge expired">Closed</span>
-                ) : canEditEvent(ev) ? (
-                  <Link to={`/events/${ev._id}/fill`} style={{
-                    background: 'var(--green)',
-                    color: '#000',
-                    padding: '8px 16px',
-                    borderRadius: '12px',
-                    fontWeight: 600,
-                    fontSize: '0.9rem',
-                  }}>
-                    Edit Response ({ev.remainingEdits} left)
-                  </Link>
-                ) : ev.alreadyFilled ? (
-                  <span className="status-badge" style={{ background: 'var(--green)', color: '#fff' }}>Submitted</span>
                 ) : ev.branchAlreadyFilled ? (
                   <span className="status-badge" style={{ background: 'var(--gold)', color: '#000' }}>
                     Branch Submitted{ev.branchFilledBy ? ` (${ev.branchFilledBy})` : ''}
                   </span>
+                ) : (ev.dcSubmissionCount || 0) >= (ev.maxDcSubmissions || 1) ? (
+                  <span className="status-badge" style={{ background: 'var(--green)', color: '#fff' }}>Submission Limit Reached</span>
                 ) : (
                   <Link to={`/events/${ev._id}/fill`} style={{
                     background: 'var(--gold)',
@@ -75,7 +61,7 @@ export function DcDashboard() {
                     fontWeight: 600,
                     fontSize: '0.9rem',
                   }}>
-                    Fill Form
+                    Fill Form ({(ev.maxDcSubmissions || 1) - (ev.dcSubmissionCount || 0)} left)
                   </Link>
                 )}
               </div>

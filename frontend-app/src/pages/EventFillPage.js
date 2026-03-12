@@ -15,47 +15,24 @@ export function EventFillPage() {
   const [branchAlreadyFilled, setBranchAlreadyFilled] = useState(false);
   const [branchFilledBy, setBranchFilledBy] = useState('');
   const [deadlinePassed, setDeadlinePassed] = useState(false);
-  const [isEditMode, setIsEditMode] = useState(false);
-  const [remainingEdits, setRemainingEdits] = useState(0);
-  const [maxDcEdits, setMaxDcEdits] = useState(0);
+  // Remove edit mode logic
+  const [submissionCount, setSubmissionCount] = useState(0);
+  const [maxDcSubmissions, setMaxDcSubmissions] = useState(1);
 
   useEffect(() => {
     apiRequest(`/events/${id}`).then((data) => {
       setEvent(data);
-      setMaxDcEdits(data.maxDcEdits || 0);
+      setMaxDcSubmissions(data.maxDcSubmissions || 1);
+      setSubmissionCount(data.dcSubmissionCount || 0);
 
       const initialAnswers = Array(data.questions.length).fill('');
       const initialFileUploads = {};
-
-      if (data.response?.answers?.length) {
-        data.response.answers.forEach((ans) => {
-          const idx = ans.questionIndex;
-          if (typeof idx === 'number' && idx >= 0 && idx < data.questions.length) {
-            initialAnswers[idx] = ans.text || '';
-            if (ans.fileUrl) {
-              initialFileUploads[idx] = {
-                fileUrl: ans.fileUrl,
-                uploading: false,
-                progress: 100,
-                error: null,
-                type: ans.fileType || undefined,
-              };
-            }
-          }
-        });
-      }
-
       setAnswers(initialAnswers);
       setFileUploads(initialFileUploads);
-      setTeamName(data.response?.teamName || '');
+      setTeamName('');
 
-      if (data.alreadyFilled) {
-        const canEdit = !!data.canEditResponse;
-        setIsEditMode(canEdit);
-        setRemainingEdits(data.remainingEdits || 0);
-        if (!canEdit) {
-          setAlreadyFilled(true);
-        }
+      if ((data.dcSubmissionCount || 0) >= (data.maxDcSubmissions || 1)) {
+        setAlreadyFilled(true);
       }
       if (data.branchAlreadyFilled) {
         setBranchAlreadyFilled(true);
@@ -148,20 +125,13 @@ export function EventFillPage() {
         };
       });
 
-      const submitPath = isEditMode ? `/events/${id}/responses/me` : `/events/${id}/responses`;
-      const submitMethod = isEditMode ? 'PUT' : 'POST';
-
-      const result = await apiRequest(submitPath, {
-        method: submitMethod,
+      await apiRequest(`/events/${id}/responses`, {
+        method: 'POST',
         body: JSON.stringify({
           teamName,
           answers: answersPayload,
         }),
       });
-
-      if (isEditMode) {
-        setRemainingEdits(result.remainingEdits || 0);
-      }
       navigate('/');
     } catch (err) {
       try {
@@ -243,13 +213,11 @@ export function EventFillPage() {
       <h2>{event.name}</h2>
       <div style={{ marginBottom: 16 }}>
         <span className="status-badge" style={{ marginRight: 8 }}>
-          Edit Limit: {maxDcEdits}
+          Submission Limit: {maxDcSubmissions}
         </span>
-        {isEditMode && (
-          <span className="status-badge">
-            Remaining Edits: {remainingEdits}
-          </span>
-        )}
+        <span className="status-badge">
+          Submissions Left: {maxDcSubmissions - submissionCount}
+        </span>
       </div>
       {event.deadline && (
         <div style={{ marginBottom: 24 }}>
@@ -381,7 +349,7 @@ export function EventFillPage() {
         ))}
         {error && <div className="error">{error}</div>}
         <button type="submit" disabled={submitting} style={{ marginTop: 12 }}>
-          {submitting ? (isEditMode ? 'Saving Changes...' : 'Submitting...') : (isEditMode ? 'Save Changes' : 'Submit Registration')}
+          {submitting ? 'Submitting...' : 'Submit Registration'}
         </button>
       </form>
     </div>

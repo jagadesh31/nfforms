@@ -15,7 +15,7 @@ const responseSchema = new mongoose.Schema(
     event: { type: mongoose.Schema.Types.ObjectId, ref: 'Event', required: true },
     dcUser: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     branchCode: { type: String },
-    dcEditCount: { type: Number, default: 0, min: 0 },
+    // dcEditCount removed: no edits allowed, only submissions
     teamName: { type: String },
     answers: [answerSchema],
   },

@@ -64,15 +64,15 @@ router.post('/upload', auth, upload.single('file'), (req, res) => {
 // Create event/form (admin only)
 router.post('/', auth, requireRole('admin'), async (req, res) => {
   try {
-    const { name, description, questions, pocUserIds, deadline, maxDcEdits } = req.body;
-    const parsedMaxDcEdits = Number.isFinite(Number(maxDcEdits)) ? Math.max(0, Math.floor(Number(maxDcEdits))) : 0;
+    const { name, description, questions, pocUserIds, deadline, maxDcSubmissions } = req.body;
+    const parsedMaxDcSubmissions = Number.isFinite(Number(maxDcSubmissions)) ? Math.max(1, Math.floor(Number(maxDcSubmissions))) : 1;
     const event = await Event.create({
       name,
       description,
       questions,
       pocUsers: pocUserIds || [],
       deadline: deadline || undefined,
-      maxDcEdits: parsedMaxDcEdits,
+      maxDcSubmissions: parsedMaxDcSubmissions,
     });
     await log('EVENT_CREATED', req.user._id, event._id, `Admin created event "${event.name}"`);
     res.status(201).json(event);
@@ -88,7 +88,7 @@ router.get('/', auth, async (req, res) => {
   if (req.user.role === 'poc') {
     filter = { pocUsers: req.user._id };
   }
-  const events = await Event.find(filter).select('name description isActive deadline maxDcEdits createdAt updatedAt');
+  const events = await Event.find(filter).select('name description isActive deadline maxDcSubmissions createdAt updatedAt');
 
   // For DC dashboard, include whether this event can still be filled by this user/branch.
   if (req.user.role !== 'dc') {
@@ -103,8 +103,13 @@ router.get('/', auth, async (req, res) => {
   const ownResponses = await Response.find({
     event: { $in: eventIds },
     dcUser: req.user._id,
-  }).select('event dcEditCount');
-  const ownResponseMap = new Map(ownResponses.map((response) => [response.event.toString(), response]));
+  }).select('event');
+  // Count submissions per event for this DC
+  const dcSubmissionCountMap = ownResponses.reduce((acc, r) => {
+    const eid = r.event.toString();
+    acc[eid] = (acc[eid] || 0) + 1;
+    return acc;
+  }, {});
 
   const branchResponseByEvent = new Map();
   const dcBranch = getBranchFromEmail(req.user.email);
@@ -126,23 +131,13 @@ router.get('/', auth, async (req, res) => {
   const enrichedEvents = events.map((event) => {
     const eventObj = event.toObject();
     const eventId = event._id.toString();
-    const ownResponse = ownResponseMap.get(eventId);
-    const alreadyFilled = !!ownResponse;
     const branchResponse = branchResponseByEvent.get(eventId);
-    const maxDcEdits = Number.isFinite(event.maxDcEdits) ? event.maxDcEdits : 0;
-    const dcEditCount = ownResponse?.dcEditCount || 0;
-    const remainingEdits = Math.max(0, maxDcEdits - dcEditCount);
-    const deadlinePassed = !!(event.deadline && new Date() > new Date(event.deadline));
-
-    eventObj.alreadyFilled = alreadyFilled;
-    eventObj.branchAlreadyFilled = !alreadyFilled && !!branchResponse;
-    eventObj.maxDcEdits = maxDcEdits;
-    eventObj.remainingEdits = remainingEdits;
-    eventObj.canEditResponse = alreadyFilled && remainingEdits > 0 && !deadlinePassed;
+    eventObj.dcSubmissionCount = dcSubmissionCountMap[eventId] || 0;
+    eventObj.maxDcSubmissions = event.maxDcSubmissions || 1;
+    eventObj.branchAlreadyFilled = !!branchResponse;
     if (eventObj.branchAlreadyFilled) {
       eventObj.branchFilledBy = branchResponse.dcUser?.name || 'Another Department Coordinator';
     }
-
     return eventObj;
   });
 
@@ -159,39 +154,24 @@ router.get('/:id', auth, async (req, res) => {
     return res.status(403).json({ message: 'Forbidden' });
   }
 
-  // For DC: check if they or someone from their branch already submitted
+  // For DC: show submission count and branch submission info
   if (req.user.role === 'dc') {
-    const existing = await Response.findOne({ event: event._id, dcUser: req.user._id });
+    const submissionCount = await Response.countDocuments({ event: event._id, dcUser: req.user._id });
     const eventObj = event.toObject();
-    eventObj.alreadyFilled = !!existing;
-    eventObj.maxDcEdits = Number.isFinite(event.maxDcEdits) ? event.maxDcEdits : 0;
-    eventObj.remainingEdits = existing
-      ? Math.max(0, eventObj.maxDcEdits - (existing.dcEditCount || 0))
-      : eventObj.maxDcEdits;
-    eventObj.canEditResponse = !!existing && eventObj.remainingEdits > 0 && !(event.deadline && new Date() > new Date(event.deadline));
-    if (existing) {
-      eventObj.response = {
-        teamName: existing.teamName || '',
-        answers: existing.answers || [],
-        dcEditCount: existing.dcEditCount || 0,
-      };
-    }
-
-    // Also check if another DC from the same branch already submitted
-    if (!existing) {
-      const dcBranch = getBranchFromEmail(req.user.email);
-      if (dcBranch) {
-        const branchResponse = await Response.findOne({
-          event: event._id,
-          branchCode: dcBranch,
-        }).populate('dcUser', 'name email');
-        if (branchResponse) {
-          eventObj.branchAlreadyFilled = true;
-          eventObj.branchFilledBy = branchResponse.dcUser?.name || 'Another Department Coordinator';
-        }
+    eventObj.dcSubmissionCount = submissionCount;
+    eventObj.maxDcSubmissions = event.maxDcSubmissions || 1;
+    // Check if another DC from the same branch already submitted
+    const dcBranch = getBranchFromEmail(req.user.email);
+    if (dcBranch) {
+      const branchResponse = await Response.findOne({
+        event: event._id,
+        branchCode: dcBranch,
+      }).populate('dcUser', 'name email');
+      if (branchResponse) {
+        eventObj.branchAlreadyFilled = true;
+        eventObj.branchFilledBy = branchResponse.dcUser?.name || 'Another Department Coordinator';
       }
     }
-
     return res.json(eventObj);
   }
 
@@ -211,16 +191,16 @@ router.put('/:id', auth, async (req, res) => {
     return res.status(403).json({ message: 'Forbidden' });
   }
 
-  const { name, description, questions, isActive, pocUserIds, deadline, maxDcEdits } = req.body;
+  const { name, description, questions, isActive, pocUserIds, deadline, maxDcSubmissions } = req.body;
   if (name !== undefined) event.name = name;
   if (description !== undefined) event.description = description;
   if (questions !== undefined) event.questions = questions;
   if (isActive !== undefined) event.isActive = isActive;
   if (pocUserIds !== undefined) event.pocUsers = pocUserIds;
   if (deadline !== undefined) event.deadline = deadline;
-  if (maxDcEdits !== undefined) {
-    const parsedMaxDcEdits = Number.isFinite(Number(maxDcEdits)) ? Math.max(0, Math.floor(Number(maxDcEdits))) : 0;
-    event.maxDcEdits = parsedMaxDcEdits;
+  if (maxDcSubmissions !== undefined) {
+    const parsedMaxDcSubmissions = Number.isFinite(Number(maxDcSubmissions)) ? Math.max(1, Math.floor(Number(maxDcSubmissions))) : 1;
+    event.maxDcSubmissions = parsedMaxDcSubmissions;
   }
 
   await event.save();
@@ -228,7 +208,7 @@ router.put('/:id', auth, async (req, res) => {
   res.json(event);
 });
 
-// DC submits response for an event
+// DC submits response for an event (up to maxDcSubmissions, no edits)
 router.post('/:id/responses', auth, requireRole('dc'), async (req, res) => {
   try {
     const event = await Event.findById(req.params.id);
@@ -239,13 +219,13 @@ router.post('/:id/responses', auth, requireRole('dc'), async (req, res) => {
       return res.status(400).json({ message: 'The deadline for this form has passed' });
     }
 
-    // Check if DC already submitted for this event
-    const existing = await Response.findOne({ event: event._id, dcUser: req.user._id });
-    if (existing) {
-      return res.status(400).json({ message: 'You have already submitted a response for this event' });
+    // Check how many times this DC has submitted for this event
+    const submissionCount = await Response.countDocuments({ event: event._id, dcUser: req.user._id });
+    if (submissionCount >= (event.maxDcSubmissions || 1)) {
+      return res.status(400).json({ message: `You have reached the maximum number of submissions (${event.maxDcSubmissions || 1}) for this event` });
     }
 
-    // Check if another DC from the same branch already submitted
+    // Check if another DC from the same branch already submitted (if you want to keep this logic)
     const dcBranch = getBranchFromEmail(req.user.email);
     if (dcBranch) {
       const branchResponse = await Response.findOne({
@@ -253,6 +233,7 @@ router.post('/:id/responses', auth, requireRole('dc'), async (req, res) => {
         branchCode: dcBranch,
       }).populate('dcUser', 'name');
       if (branchResponse) {
+        // Optionally, you may want to allow multiple DCs from the same branch if that's desired
         return res.status(400).json({
           message: `A Department Coordinator from your branch (${branchResponse.dcUser?.name || 'unknown'}) has already submitted a response for this event`,
         });
@@ -287,44 +268,7 @@ router.post('/:id/responses', auth, requireRole('dc'), async (req, res) => {
   }
 });
 
-// DC edits their own submitted response (limited by event.maxDcEdits and deadline)
-router.put('/:id/responses/me', auth, requireRole('dc'), async (req, res) => {
-  try {
-    const event = await Event.findById(req.params.id);
-    if (!event) return res.status(404).json({ message: 'Event not found' });
-
-    if (event.deadline && new Date() > new Date(event.deadline)) {
-      return res.status(400).json({ message: 'The deadline for this form has passed' });
-    }
-
-    const response = await Response.findOne({ event: event._id, dcUser: req.user._id });
-    if (!response) {
-      return res.status(404).json({ message: 'You have not submitted a response for this event yet' });
-    }
-
-    const maxDcEdits = Number.isFinite(event.maxDcEdits) ? event.maxDcEdits : 0;
-    if ((response.dcEditCount || 0) >= maxDcEdits) {
-      return res.status(400).json({ message: 'You have reached the maximum number of edits allowed for this form' });
-    }
-
-    const { teamName, answers } = req.body;
-    if (teamName !== undefined) response.teamName = teamName;
-    if (answers !== undefined) response.answers = answers;
-    response.dcEditCount = (response.dcEditCount || 0) + 1;
-
-    await response.save();
-    await log('RESPONSE_EDITED_BY_DC', req.user._id, event._id, `Department Coordinator "${req.user.name}" edited their response (${response.dcEditCount}/${maxDcEdits})`);
-
-    res.json({
-      response,
-      remainingEdits: Math.max(0, maxDcEdits - response.dcEditCount),
-      maxDcEdits,
-    });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: 'Server error' });
-  }
-});
+// DC edit endpoint removed: editing is not allowed anymore
 
 // Admin + POC can see responses for an event
 router.get('/:id/responses', auth, async (req, res) => {
