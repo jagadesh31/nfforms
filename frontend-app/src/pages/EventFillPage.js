@@ -12,8 +12,6 @@ export function EventFillPage() {
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [alreadyFilled, setAlreadyFilled] = useState(false);
-  const [branchAlreadyFilled, setBranchAlreadyFilled] = useState(false);
-  const [branchFilledBy, setBranchFilledBy] = useState('');
   const [deadlinePassed, setDeadlinePassed] = useState(false);
   // Remove edit mode logic
   const [submissionCount, setSubmissionCount] = useState(0);
@@ -33,10 +31,6 @@ export function EventFillPage() {
 
       if ((data.dcSubmissionCount || 0) >= (data.maxDcSubmissions || 1)) {
         setAlreadyFilled(true);
-      }
-      if (data.branchAlreadyFilled) {
-        setBranchAlreadyFilled(true);
-        setBranchFilledBy(data.branchFilledBy || 'Another Department Coordinator');
       }
       if (data.deadline && new Date() > new Date(data.deadline)) setDeadlinePassed(true);
     });
@@ -172,24 +166,6 @@ export function EventFillPage() {
     );
   }
 
-  if (branchAlreadyFilled) {
-    return (
-      <div className="page" style={{ display: 'flex', justifyContent: 'center', marginTop: 40 }}>
-        <div className="card" style={{ textAlign: 'center' }}>
-          <div style={{ fontWeight: 700, fontSize: '1.5rem', color: 'var(--gold)', marginBottom: 12 }}>
-            Branch Already Submitted!
-          </div>
-          <div style={{ fontWeight: 600, fontSize: '1.2rem', marginBottom: 8, color: 'var(--text-primary)' }}>
-            {event.name}
-          </div>
-          <p className="muted" style={{ marginBottom: 24 }}>
-            <strong style={{ color: 'var(--text-primary)' }}>{branchFilledBy}</strong> from your branch has already submitted a response for this event.
-          </p>
-          <button onClick={() => navigate('/')}>Go Back</button>
-        </div>
-      </div>
-    );
-  }
 
   if (deadlinePassed) {
     return (

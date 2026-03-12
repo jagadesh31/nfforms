@@ -22,16 +22,8 @@ const responseSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// Hard guardrails: one response per user per event, and one response per branch per event.
-responseSchema.index({ event: 1, dcUser: 1 }, { unique: true });
-responseSchema.index(
-  { event: 1, branchCode: 1 },
-  {
-    unique: true,
-    partialFilterExpression: {
-      branchCode: { $type: 'string' },
-    },
-  }
-);
+// Indexes for performance (not unique anymore to allow multiple submissions)
+responseSchema.index({ event: 1, dcUser: 1 });
+responseSchema.index({ event: 1, branchCode: 1 });
 
 module.exports = mongoose.model('Response', responseSchema);

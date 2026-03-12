@@ -14,6 +14,7 @@ export function PocDashboard() {
   const [editName, setEditName] = useState('');
   const [editDescription, setEditDescription] = useState('');
   const [editQuestions, setEditQuestions] = useState([]);
+  const [editMaxDcSubmissions, setEditMaxDcSubmissions] = useState(1);
   const [editDeadline, setEditDeadline] = useState('');
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState('');
@@ -33,6 +34,7 @@ export function PocDashboard() {
       isAudio: q.isAudio || false,
       isVideo: q.isVideo || false,
     })));
+    setEditMaxDcSubmissions(data.maxDcSubmissions || 1);
     setEditDeadline(data.deadline ? toLocalISOString(data.deadline) : '');
     setSaveMsg('');
   };
@@ -71,6 +73,7 @@ export function PocDashboard() {
               isAudio: q.isAudio,
               isVideo: q.isVideo,
             })),
+          maxDcSubmissions: editMaxDcSubmissions,
           deadline: editDeadline ? new Date(editDeadline).toISOString() : null,
         }),
       });
@@ -131,6 +134,15 @@ export function PocDashboard() {
             <label>
               Deadline
               <input type="datetime-local" value={editDeadline} onChange={(e) => setEditDeadline(e.target.value)} />
+            </label>
+            <label>
+              Max Submissions per DC
+              <input
+                type="number"
+                min="1"
+                value={editMaxDcSubmissions}
+                onChange={(e) => setEditMaxDcSubmissions(Math.max(1, Number(e.target.value) || 1))}
+              />
             </label>
             <div>
               <div style={{ fontWeight: 600, color: 'var(--grey-text)', marginBottom: 12 }}>

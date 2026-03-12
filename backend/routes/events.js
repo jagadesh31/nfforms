@@ -111,33 +111,11 @@ router.get('/', auth, async (req, res) => {
     return acc;
   }, {});
 
-  const branchResponseByEvent = new Map();
-  const dcBranch = getBranchFromEmail(req.user.email);
-
-  if (dcBranch) {
-    const branchResponses = await Response.find({
-      event: { $in: eventIds },
-      branchCode: dcBranch,
-    }).populate('dcUser', 'name');
-
-    for (const response of branchResponses) {
-      const eventId = response.event.toString();
-      if (!branchResponseByEvent.has(eventId)) {
-        branchResponseByEvent.set(eventId, response);
-      }
-    }
-  }
-
   const enrichedEvents = events.map((event) => {
     const eventObj = event.toObject();
     const eventId = event._id.toString();
-    const branchResponse = branchResponseByEvent.get(eventId);
     eventObj.dcSubmissionCount = dcSubmissionCountMap[eventId] || 0;
     eventObj.maxDcSubmissions = event.maxDcSubmissions || 1;
-    eventObj.branchAlreadyFilled = !!branchResponse;
-    if (eventObj.branchAlreadyFilled) {
-      eventObj.branchFilledBy = branchResponse.dcUser?.name || 'Another Department Coordinator';
-    }
     return eventObj;
   });
 
@@ -154,24 +132,12 @@ router.get('/:id', auth, async (req, res) => {
     return res.status(403).json({ message: 'Forbidden' });
   }
 
-  // For DC: show submission count and branch submission info
+  // For DC: show submission count
   if (req.user.role === 'dc') {
     const submissionCount = await Response.countDocuments({ event: event._id, dcUser: req.user._id });
     const eventObj = event.toObject();
     eventObj.dcSubmissionCount = submissionCount;
     eventObj.maxDcSubmissions = event.maxDcSubmissions || 1;
-    // Check if another DC from the same branch already submitted
-    const dcBranch = getBranchFromEmail(req.user.email);
-    if (dcBranch) {
-      const branchResponse = await Response.findOne({
-        event: event._id,
-        branchCode: dcBranch,
-      }).populate('dcUser', 'name email');
-      if (branchResponse) {
-        eventObj.branchAlreadyFilled = true;
-        eventObj.branchFilledBy = branchResponse.dcUser?.name || 'Another Department Coordinator';
-      }
-    }
     return res.json(eventObj);
   }
 
@@ -225,21 +191,7 @@ router.post('/:id/responses', auth, requireRole('dc'), async (req, res) => {
       return res.status(400).json({ message: `You have reached the maximum number of submissions (${event.maxDcSubmissions || 1}) for this event` });
     }
 
-    // Check if another DC from the same branch already submitted (if you want to keep this logic)
     const dcBranch = getBranchFromEmail(req.user.email);
-    if (dcBranch) {
-      const branchResponse = await Response.findOne({
-        event: event._id,
-        branchCode: dcBranch,
-      }).populate('dcUser', 'name');
-      if (branchResponse) {
-        // Optionally, you may want to allow multiple DCs from the same branch if that's desired
-        return res.status(400).json({
-          message: `A Department Coordinator from your branch (${branchResponse.dcUser?.name || 'unknown'}) has already submitted a response for this event`,
-        });
-      }
-    }
-
     const { teamName, answers } = req.body;
 
     const response = await Response.create({
@@ -256,10 +208,10 @@ router.post('/:id/responses', auth, requireRole('dc'), async (req, res) => {
     if (err?.code === 11000) {
       const duplicateField = Object.keys(err.keyPattern || {})[0];
       if (duplicateField === 'dcUser') {
-        return res.status(400).json({ message: 'You have already submitted a response for this event' });
-      }
-      if (duplicateField === 'branchCode') {
-        return res.status(400).json({ message: 'A Department Coordinator from your branch has already submitted a response for this event' });
+        const submissionCount = await Response.countDocuments({ event: event._id, dcUser: req.user._id });
+        if (submissionCount >= (event.maxDcSubmissions || 1)) {
+          return res.status(400).json({ message: 'You have already submitted the maximum number of responses for this event' });
+        }
       }
       return res.status(400).json({ message: 'Duplicate response detected for this event' });
     }

@@ -15,7 +15,7 @@ export function DcDashboard() {
 
   // For new logic: allow up to maxDcSubmissions per DC, no edits
   const canFillEvent = (event) => {
-    return !isDeadlinePassed(event.deadline) && (event.dcSubmissionCount || 0) < (event.maxDcSubmissions || 1) && !event.branchAlreadyFilled;
+    return !isDeadlinePassed(event.deadline) && (event.dcSubmissionCount || 0) < (event.maxDcSubmissions || 1);
   };
 
   const fillableCount = events.filter(canFillEvent).length;
@@ -46,10 +46,6 @@ export function DcDashboard() {
                 <strong style={{ fontSize: '1.1rem' }}>{ev.name}</strong>
                 {isDeadlinePassed(ev.deadline) ? (
                   <span className="status-badge expired">Closed</span>
-                ) : ev.branchAlreadyFilled ? (
-                  <span className="status-badge" style={{ background: 'var(--gold)', color: '#000' }}>
-                    Branch Submitted{ev.branchFilledBy ? ` (${ev.branchFilledBy})` : ''}
-                  </span>
                 ) : (ev.dcSubmissionCount || 0) >= (ev.maxDcSubmissions || 1) ? (
                   <span className="status-badge" style={{ background: 'var(--green)', color: '#fff' }}>Submission Limit Reached</span>
                 ) : (
