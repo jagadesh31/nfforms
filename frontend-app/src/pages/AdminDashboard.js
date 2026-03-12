@@ -80,7 +80,7 @@ export function AdminDashboard() {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [questions, setQuestions] = useState([{ text: '', isRollNumber: false, isAudio: false, isVideo: false }]);
-  const [maxDcEdits, setMaxDcEdits] = useState(0);
+  const [maxDcSubmissions, setMaxDcSubmissions] = useState(1);
   const [deadline, setDeadline] = useState('');
   const [pocUsers, setPocUsers] = useState([]);
   const [selectedPocIds, setSelectedPocIds] = useState([]);
@@ -103,7 +103,7 @@ export function AdminDashboard() {
   const [editName, setEditName] = useState('');
   const [editDescription, setEditDescription] = useState('');
   const [editQuestions, setEditQuestions] = useState([]);
-  const [editMaxDcEdits, setEditMaxDcEdits] = useState(0);
+  const [editMaxDcSubmissions, setEditMaxDcSubmissions] = useState(1);
   const [editDeadline, setEditDeadline] = useState('');
   const [editPocIds, setEditPocIds] = useState([]);
   const [editSaving, setEditSaving] = useState(false);
@@ -163,7 +163,7 @@ export function AdminDashboard() {
           questions: questions
             .filter((q) => q.text.trim())
             .map((q) => ({ text: q.text.trim(), required: true, isRollNumber: q.isRollNumber, isAudio: q.isAudio, isVideo: q.isVideo })),
-          maxDcEdits,
+          maxDcSubmissions,
           pocUserIds: selectedPocIds,
           deadline: deadline ? new Date(deadline).toISOString() : null,
         }),
@@ -171,7 +171,7 @@ export function AdminDashboard() {
       setName('');
       setDescription('');
       setQuestions([{ text: '', isRollNumber: false, isAudio: false, isVideo: false }]);
-      setMaxDcEdits(0);
+      setMaxDcSubmissions(1);
       setSelectedPocIds([]);
       setDeadline('');
       setActiveTab('events');
@@ -242,7 +242,7 @@ export function AdminDashboard() {
     setEditName(data.name || '');
     setEditDescription(data.description || '');
     setEditQuestions(data.questions.map((q) => ({ text: q.text, isRollNumber: q.isRollNumber || false, isAudio: q.isAudio || false, isVideo: q.isVideo || false })));
-    setEditMaxDcEdits(data.maxDcEdits || 0);
+    setEditMaxDcSubmissions(data.maxDcSubmissions || 1);
     setEditDeadline(data.deadline ? toLocalISOString(data.deadline) : '');
     setEditPocIds((data.pocUsers || []).map((p) => p._id || p));
     setEditMsg('');
@@ -277,7 +277,7 @@ export function AdminDashboard() {
           questions: editQuestions
             .filter((q) => q.text.trim())
             .map((q) => ({ text: q.text.trim(), required: true, isRollNumber: q.isRollNumber, isAudio: q.isAudio, isVideo: q.isVideo })),
-          maxDcEdits: editMaxDcEdits,
+          maxDcSubmissions: editMaxDcSubmissions,
           pocUserIds: editPocIds,
           deadline: editDeadline ? new Date(editDeadline).toISOString() : null,
         }),
@@ -393,12 +393,12 @@ export function AdminDashboard() {
                 <input type="datetime-local" value={deadline} onChange={(e) => setDeadline(e.target.value)} />
               </label>
               <label>
-                DC Edit Limit (after first submission)
+                Max Submissions per DC
                 <input
                   type="number"
-                  min="0"
-                  value={maxDcEdits}
-                  onChange={(e) => setMaxDcEdits(Math.max(0, Number(e.target.value) || 0))}
+                  min="1"
+                  value={maxDcSubmissions}
+                  onChange={(e) => setMaxDcSubmissions(Math.max(1, Number(e.target.value) || 1))}
                 />
               </label>
               <div>
@@ -463,12 +463,12 @@ export function AdminDashboard() {
                 <input type="datetime-local" value={editDeadline} onChange={(e) => setEditDeadline(e.target.value)} />
               </label>
               <label>
-                DC Edit Limit (after first submission)
+                Max Submissions per DC
                 <input
                   type="number"
-                  min="0"
-                  value={editMaxDcEdits}
-                  onChange={(e) => setEditMaxDcEdits(Math.max(0, Number(e.target.value) || 0))}
+                  min="1"
+                  value={editMaxDcSubmissions}
+                  onChange={(e) => setEditMaxDcSubmissions(Math.max(1, Number(e.target.value) || 1))}
                 />
               </label>
               <div>
