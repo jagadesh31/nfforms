@@ -16,6 +16,7 @@ const responseSchema = new mongoose.Schema(
     dcUser: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     teamName: { type: String },
     answers: [answerSchema],
+    editCount: { type: Number, default: 0 },
   },
   { timestamps: true }
 );

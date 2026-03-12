@@ -17,6 +17,7 @@ const eventSchema = new mongoose.Schema(
     description: { type: String },
     isActive: { type: Boolean, default: true },
     deadline: { type: Date },
+    maxEdits: { type: Number, default: 0 },
     questions: [questionSchema],
     pocUsers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   },

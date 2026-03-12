@@ -64,13 +64,14 @@ router.post('/upload', auth, upload.single('file'), (req, res) => {
 // Create event/form (admin only)
 router.post('/', auth, requireRole('admin'), async (req, res) => {
   try {
-    const { name, description, questions, pocUserIds, deadline } = req.body;
+    const { name, description, questions, pocUserIds, deadline, maxEdits } = req.body;
     const event = await Event.create({
       name,
       description,
       questions,
       pocUsers: pocUserIds || [],
       deadline: deadline || undefined,
+      maxEdits: maxEdits || 0,
     });
     await log('EVENT_CREATED', req.user._id, event._id, `Admin created event "${event.name}"`);
     res.status(201).json(event);
@@ -105,6 +106,7 @@ router.get('/:id', auth, async (req, res) => {
     const existing = await Response.findOne({ event: event._id, dcUser: req.user._id });
     const eventObj = event.toObject();
     eventObj.alreadyFilled = !!existing;
+    eventObj.previousResponse = existing;
 
     // Also check if another DC from the same branch already submitted
     if (!existing) {
@@ -146,13 +148,14 @@ router.put('/:id', auth, async (req, res) => {
     return res.status(403).json({ message: 'Forbidden' });
   }
 
-  const { name, description, questions, isActive, pocUserIds, deadline } = req.body;
+  const { name, description, questions, isActive, pocUserIds, deadline, maxEdits } = req.body;
   if (name !== undefined) event.name = name;
   if (description !== undefined) event.description = description;
   if (questions !== undefined) event.questions = questions;
   if (isActive !== undefined) event.isActive = isActive;
   if (pocUserIds !== undefined) event.pocUsers = pocUserIds;
   if (deadline !== undefined) event.deadline = deadline;
+  if (maxEdits !== undefined) event.maxEdits = maxEdits;
 
   await event.save();
   await log('EVENT_UPDATED', req.user._id, event._id, `${req.user.role} updated event "${event.name}"`);
@@ -228,23 +231,43 @@ router.get('/:id/responses', auth, async (req, res) => {
   res.json(responses);
 });
 
-// POC or Admin updates an existing response
+// POC or Admin or DC updates an existing response
 router.put('/:id/responses/:responseId', auth, async (req, res) => {
   try {
     const event = await Event.findById(req.params.id);
     if (!event) return res.status(404).json({ message: 'Event not found' });
 
+    // Check permissions
     const isAdmin = req.user.role === 'admin' || req.user.role === 'masterAdmin';
-    const isPocForEvent =
-      req.user.role === 'poc' && event.pocUsers.some((u) => u.equals(req.user._id));
+    const isPocForEvent = req.user.role === 'poc' && event.pocUsers.some((u) => u.equals(req.user._id));
+    const isDc = req.user.role === 'dc';
 
-    if (!isAdmin && !isPocForEvent) {
+    if (!isAdmin && !isPocForEvent && !isDc) {
       return res.status(403).json({ message: 'Forbidden' });
     }
 
     const response = await Response.findById(req.params.responseId);
     if (!response || response.event.toString() !== event._id.toString()) {
       return res.status(404).json({ message: 'Response not found' });
+    }
+
+    if (isDc) {
+      // Check if it's their own response
+      if (response.dcUser.toString() !== req.user._id.toString()) {
+        return res.status(403).json({ message: 'Forbidden: You can only edit your own response' });
+      }
+      // Check maxedits
+      if (response.editCount >= (event.maxEdits || 0)) {
+        return res.status(403).json({ message: 'You have reached the maximum number of allowed edits' });
+      }
+      
+      // Check deadline
+      if (event.deadline && new Date() > new Date(event.deadline)) {
+        return res.status(400).json({ message: 'The deadline for this form has passed' });
+      }
+      
+      // Increment edit count
+      response.editCount += 1;
     }
 
     const { teamName, answers } = req.body;
