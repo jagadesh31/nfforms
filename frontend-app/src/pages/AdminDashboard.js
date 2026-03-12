@@ -81,6 +81,7 @@ export function AdminDashboard() {
   const [description, setDescription] = useState('');
   const [questions, setQuestions] = useState([{ text: '', isRollNumber: false, isAudio: false, isVideo: false }]);
   const [deadline, setDeadline] = useState('');
+  const [maxEdits, setMaxEdits] = useState(0);
   const [pocUsers, setPocUsers] = useState([]);
   const [selectedPocIds, setSelectedPocIds] = useState([]);
   const [error, setError] = useState('');
@@ -103,6 +104,7 @@ export function AdminDashboard() {
   const [editDescription, setEditDescription] = useState('');
   const [editQuestions, setEditQuestions] = useState([]);
   const [editDeadline, setEditDeadline] = useState('');
+  const [editMaxEdits, setEditMaxEdits] = useState(0);
   const [editPocIds, setEditPocIds] = useState([]);
   const [editSaving, setEditSaving] = useState(false);
   const [editMsg, setEditMsg] = useState('');
@@ -163,6 +165,7 @@ export function AdminDashboard() {
             .map((q) => ({ text: q.text.trim(), required: true, isRollNumber: q.isRollNumber, isAudio: q.isAudio, isVideo: q.isVideo })),
           pocUserIds: selectedPocIds,
           deadline: deadline ? new Date(deadline).toISOString() : null,
+          maxEdits: parseInt(maxEdits) || 0,
         }),
       });
       setName('');
@@ -170,6 +173,7 @@ export function AdminDashboard() {
       setQuestions([{ text: '', isRollNumber: false, isAudio: false, isVideo: false }]);
       setSelectedPocIds([]);
       setDeadline('');
+      setMaxEdits(0);
       setActiveTab('events');
       await loadEvents();
     } catch (err) {
@@ -239,6 +243,7 @@ export function AdminDashboard() {
     setEditDescription(data.description || '');
     setEditQuestions(data.questions.map((q) => ({ text: q.text, isRollNumber: q.isRollNumber || false, isAudio: q.isAudio || false, isVideo: q.isVideo || false })));
     setEditDeadline(data.deadline ? toLocalISOString(data.deadline) : '');
+    setEditMaxEdits(data.maxEdits || 0);
     setEditPocIds((data.pocUsers || []).map((p) => p._id || p));
     setEditMsg('');
     setActiveTab('create'); // reuse create tab for edit form
@@ -274,6 +279,7 @@ export function AdminDashboard() {
             .map((q) => ({ text: q.text.trim(), required: true, isRollNumber: q.isRollNumber, isAudio: q.isAudio, isVideo: q.isVideo })),
           pocUserIds: editPocIds,
           deadline: editDeadline ? new Date(editDeadline).toISOString() : null,
+          maxEdits: parseInt(editMaxEdits) || 0,
         }),
       });
       setEditMsg('Event updated successfully.');
@@ -386,6 +392,10 @@ export function AdminDashboard() {
                 Deadline
                 <input type="datetime-local" value={deadline} onChange={(e) => setDeadline(e.target.value)} />
               </label>
+              <label>
+                Max Number of Edits by DC
+                <input type="number" min="0" value={maxEdits} onChange={(e) => setMaxEdits(e.target.value)} placeholder="0 means no edits allowed" />
+              </label>
               <div>
                 <div style={{ fontWeight: 600, color: 'var(--grey-text)', marginBottom: 12 }}>
                   Questions
@@ -446,6 +456,10 @@ export function AdminDashboard() {
               <label>
                 Deadline
                 <input type="datetime-local" value={editDeadline} onChange={(e) => setEditDeadline(e.target.value)} />
+              </label>
+              <label>
+                Max Number of Edits by DC
+                <input type="number" min="0" value={editMaxEdits} onChange={(e) => setEditMaxEdits(e.target.value)} placeholder="0 means no edits allowed" />
               </label>
               <div>
                 <div style={{ fontWeight: 600, color: 'var(--grey-text)', marginBottom: 12 }}>

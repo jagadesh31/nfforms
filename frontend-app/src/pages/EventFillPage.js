@@ -16,16 +16,41 @@ export function EventFillPage() {
   const [branchFilledBy, setBranchFilledBy] = useState('');
   const [deadlinePassed, setDeadlinePassed] = useState(false);
 
+  const [canEdit, setCanEdit] = useState(true);
+
   useEffect(() => {
     apiRequest(`/events/${id}`).then((data) => {
       setEvent(data);
-      setAnswers(Array(data.questions.length).fill(''));
-      if (data.alreadyFilled) setAlreadyFilled(true);
+      const isDeadlinePassed = data.deadline && new Date() > new Date(data.deadline);
+      if (isDeadlinePassed) setDeadlinePassed(true);
+
+      if (data.alreadyFilled) {
+        setAlreadyFilled(true);
+        const prev = data.previousResponse;
+        setTeamName(prev?.teamName || '');
+        const newAnswers = Array(data.questions.length).fill('');
+        const newFiles = {};
+        (prev?.answers || []).forEach(ans => {
+          if (ans.questionIndex < data.questions.length) {
+            newAnswers[ans.questionIndex] = ans.text || '';
+            if (ans.fileUrl) {
+              newFiles[ans.questionIndex] = { fileUrl: ans.fileUrl, type: ans.fileType, uploading: false };
+            }
+          }
+        });
+        setAnswers(newAnswers);
+        setFileUploads(newFiles);
+        const editsLeft = (data.maxEdits || 0) > (prev?.editCount || 0);
+        setCanEdit(editsLeft && !isDeadlinePassed);
+      } else {
+        setAnswers(Array(data.questions.length).fill(''));
+        setCanEdit(!isDeadlinePassed);
+      }
+
       if (data.branchAlreadyFilled) {
         setBranchAlreadyFilled(true);
         setBranchFilledBy(data.branchFilledBy || 'Another Department Coordinator');
       }
-      if (data.deadline && new Date() > new Date(data.deadline)) setDeadlinePassed(true);
     });
   }, [id]);
 
@@ -112,13 +137,22 @@ export function EventFillPage() {
         };
       });
 
-      await apiRequest(`/events/${id}/responses`, {
-        method: 'POST',
-        body: JSON.stringify({
-          teamName,
-          answers: answersPayload,
-        }),
-      });
+      if (alreadyFilled && canEdit && event.previousResponse) {
+        // Edit existing
+        await apiRequest(`/events/${id}/responses/${event.previousResponse._id}`, {
+          method: 'PUT',
+          body: JSON.stringify({ teamName, answers: answersPayload }),
+        });
+      } else {
+        // Create new
+        await apiRequest(`/events/${id}/responses`, {
+          method: 'POST',
+          body: JSON.stringify({
+            teamName,
+            answers: answersPayload,
+          }),
+        });
+      }
       navigate('/');
     } catch (err) {
       try {
@@ -142,22 +176,7 @@ export function EventFillPage() {
     );
   }
 
-  if (alreadyFilled) {
-    return (
-      <div className="page" style={{ display: 'flex', justifyContent: 'center', marginTop: 40 }}>
-        <div className="card" style={{ textAlign: 'center' }}>
-          <div style={{ fontWeight: 700, fontSize: '1.5rem', color: 'var(--green)', marginBottom: 12 }}>
-            Already Submitted!
-          </div>
-          <div style={{ fontWeight: 600, fontSize: '1.2rem', marginBottom: 8, color: 'var(--text-primary)' }}>
-            {event.name}
-          </div>
-          <p className="muted" style={{ marginBottom: 24 }}>You have already submitted your response for this event.</p>
-          <button onClick={() => navigate('/')}>Go Back</button>
-        </div>
-      </div>
-    );
-  }
+  // Don't show "Already Submitted" block if we can edit or are just viewing.
 
   if (branchAlreadyFilled) {
     return (
@@ -178,7 +197,7 @@ export function EventFillPage() {
     );
   }
 
-  if (deadlinePassed) {
+  if (deadlinePassed && !alreadyFilled) {
     return (
       <div className="page" style={{ display: 'flex', justifyContent: 'center', marginTop: 40 }}>
         <div className="card" style={{ textAlign: 'center' }}>
@@ -206,7 +225,7 @@ export function EventFillPage() {
       <form onSubmit={handleSubmit} className="card" style={{ maxWidth: 600, margin: '0 auto' }}>
         <label>
           Team Name
-          <input value={teamName} onChange={(e) => setTeamName(e.target.value)} required placeholder="Enter your team name" />
+          <input value={teamName} onChange={(e) => setTeamName(e.target.value)} required disabled={!canEdit} placeholder="Enter your team name" />
         </label>
         {event.questions.map((q, idx) => (
           <div key={idx} className="fill-question">
@@ -225,6 +244,7 @@ export function EventFillPage() {
               value={answers[idx]}
               onChange={(e) => handleChangeAnswer(idx, e.target.value)}
               required={q.required && !q.isAudio && !q.isVideo}
+              disabled={!canEdit}
               rows={q.isAudio || q.isVideo ? 2 : 3}
               placeholder={q.isAudio || q.isVideo ? "Optional text note..." : "Your answer..."}
             />
@@ -241,7 +261,7 @@ export function EventFillPage() {
                   </svg>
                   Upload Audio File
                 </div>
-                {!fileUploads[idx]?.fileUrl && !fileUploads[idx]?.uploading && (
+                {!fileUploads[idx]?.fileUrl && !fileUploads[idx]?.uploading && canEdit && (
                   <label className="file-upload-btn">
                     <input
                       type="file"
@@ -269,7 +289,7 @@ export function EventFillPage() {
                       <span>Audio uploaded</span>
                       <audio controls src={`${BASE_URL}${fileUploads[idx].fileUrl}`} style={{ height: 32, maxWidth: '100%' }} />
                     </div>
-                    <button type="button" onClick={() => removeFile(idx)} className="upload-remove-btn">Remove</button>
+                    {canEdit && <button type="button" onClick={() => removeFile(idx)} className="upload-remove-btn">Remove</button>}
                   </div>
                 )}
                 {fileUploads[idx]?.error && (
@@ -288,7 +308,7 @@ export function EventFillPage() {
                   </svg>
                   Upload Video File
                 </div>
-                {!fileUploads[idx]?.fileUrl && !fileUploads[idx]?.uploading && (
+                {!fileUploads[idx]?.fileUrl && !fileUploads[idx]?.uploading && canEdit && (
                   <label className="file-upload-btn">
                     <input
                       type="file"
@@ -316,7 +336,7 @@ export function EventFillPage() {
                       <span>Video uploaded</span>
                     </div>
                     <video controls src={`${BASE_URL}${fileUploads[idx].fileUrl}`} style={{ maxWidth: '100%', borderRadius: 8, marginTop: 8 }} />
-                    <button type="button" onClick={() => removeFile(idx)} className="upload-remove-btn">Remove</button>
+                    {canEdit && <button type="button" onClick={() => removeFile(idx)} className="upload-remove-btn">Remove</button>}
                   </div>
                 )}
                 {fileUploads[idx]?.error && (
@@ -327,9 +347,16 @@ export function EventFillPage() {
           </div>
         ))}
         {error && <div className="error">{error}</div>}
-        <button type="submit" disabled={submitting} style={{ marginTop: 12 }}>
-          {submitting ? 'Submitting...' : 'Submit Registration'}
-        </button>
+        {canEdit && (
+          <button type="submit" disabled={submitting} style={{ marginTop: 12 }}>
+            {submitting ? 'Submitting...' : alreadyFilled ? 'Update Registration' : 'Submit Registration'}
+          </button>
+        )}
+        {!canEdit && alreadyFilled && (
+          <div className="muted" style={{ marginTop: 24, textAlign: 'center', fontWeight: 500 }}>
+            {deadlinePassed ? 'Deadline has passed.' : 'Maximum edits reached.'} Your response is read-only.
+          </div>
+        )}
       </form>
     </div>
   );
